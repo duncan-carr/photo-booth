@@ -13,6 +13,8 @@
 # testing
 /coverage
 
+public/emaildata.csv
+
 # next.js
 /.next/
 /out/
