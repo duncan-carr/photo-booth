@@ -5,49 +5,71 @@ import { useEffect, useRef } from "react";
 type OnFileMoved = (fileName: string, groupId: string) => void;
 
 export const useWebSocket = (onFileMoved?: OnFileMoved) => {
-	const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const onFileMovedRef = useRef<OnFileMoved | undefined>(onFileMoved);
 
-	useEffect(() => {
-		wsRef.current = new WebSocket("ws://localhost:3001");
+  // Update the ref whenever the callback changes
+  useEffect(() => {
+    onFileMovedRef.current = onFileMoved;
+  }, [onFileMoved]);
 
-		wsRef.current.onopen = () => {
-			console.log("Connected to WebSocket server");
-		};
+  useEffect(() => {
+    wsRef.current = new WebSocket("ws://localhost:3001");
 
-		wsRef.current.onerror = (error) => {
-			console.error("WebSocket error:", error);
-		};
+    wsRef.current.onopen = () => {
+      console.log("Connected to WebSocket server");
+    };
 
-		wsRef.current.onclose = () => {
-			console.log("Disconnected from WebSocket server");
-		};
+    wsRef.current.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
 
-		wsRef.current.onmessage = (event) => {
-			try {
-				const data = JSON.parse(event.data);
-				if (data.type === "FILE_MOVED" && onFileMoved) {
-					onFileMoved(data.fileName, data.groupId);
-				}
-			} catch (error) {
-				console.error("Error processing WebSocket message:", error);
-			}
-		};
+    wsRef.current.onclose = () => {
+      console.log("Disconnected from WebSocket server");
+    };
 
-		return () => {
-			wsRef.current?.close();
-		};
-	}, [onFileMoved]);
+    wsRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "FILE_MOVED" && onFileMovedRef.current) {
+          onFileMovedRef.current(data.fileName, data.groupId);
+        }
+      } catch (error) {
+        console.error("Error processing WebSocket message:", error);
+      }
+    };
 
-	const setActiveGroup = (groupId: string | null) => {
-		if (wsRef.current?.readyState === WebSocket.OPEN) {
-			wsRef.current.send(
-				JSON.stringify({
-					type: "SET_ACTIVE_GROUP",
-					groupId,
-				})
-			);
-		}
-	};
+    return () => {
+      wsRef.current?.close();
+    };
+  }, []); // Empty dependency array - only connect once
 
-	return { setActiveGroup };
+  const setActiveGroup = (groupId: string | null) => {
+    const sendMessage = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "SET_ACTIVE_GROUP",
+            groupId,
+          }),
+        );
+      } else if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        // Wait for connection to open
+        const openHandler = () => {
+          wsRef.current?.send(
+            JSON.stringify({
+              type: "SET_ACTIVE_GROUP",
+              groupId,
+            }),
+          );
+          wsRef.current?.removeEventListener("open", openHandler);
+        };
+        wsRef.current?.addEventListener("open", openHandler);
+      }
+    };
+
+    sendMessage();
+  };
+
+  return { setActiveGroup };
 };

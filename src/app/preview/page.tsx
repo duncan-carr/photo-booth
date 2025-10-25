@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useGroupSync } from "@/hooks/useGroupSync";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface Group {
   uuid: string;
@@ -17,6 +18,25 @@ export default function PreviewPage() {
   const [loading, setLoading] = useState(false);
 
   const { onGroupChange, broadcastPreviewStatus } = useGroupSync();
+
+  // Listen for new images being added via WebSocket
+  useWebSocket((fileName, movedGroupId) => {
+    // Refresh the group data if a file was moved to the currently previewed group
+    if (group && movedGroupId === group.uuid) {
+      const fetchGroup = async () => {
+        try {
+          const response = await fetch(`/api/group/${group.uuid}`);
+          if (response.ok) {
+            const data = await response.json();
+            setGroup(data);
+          }
+        } catch (error) {
+          console.error("Failed to refresh preview after file moved", error);
+        }
+      };
+      fetchGroup();
+    }
+  });
 
   useEffect(() => {
     const cleanup = onGroupChange(async (groupUuid) => {
@@ -92,7 +112,7 @@ export default function PreviewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
         {group.images.map((image, index) => (
           <div
-            key={index}
+            key={`${image}-${group.images.length}`}
             className="relative aspect-video rounded-lg overflow-hidden bg-gray-900"
           >
             <Image
@@ -101,6 +121,7 @@ export default function PreviewPage() {
               fill
               style={{ objectFit: "cover" }}
               sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              unoptimized
             />
           </div>
         ))}

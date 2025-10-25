@@ -5,13 +5,13 @@ import { NewGroupButton } from "@/components/new-group";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
-	Info,
-	Send,
-	Trash2,
-	Camera,
-	RotateCcw,
-	Monitor,
-	MonitorOff,
+  Info,
+  Send,
+  Trash2,
+  Camera,
+  RotateCcw,
+  Monitor,
+  MonitorOff,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -23,307 +23,328 @@ import { Badge } from "@/components/ui/badge";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface Group {
-	uuid: string;
-	createdAt: string;
-	ids: string[];
-	images: string[];
-	folder: "draft" | "sent" | "trash";
+  uuid: string;
+  createdAt: string;
+  ids: string[];
+  images: string[];
+  folder: "draft" | "sent" | "trash";
 }
 
 export default function Page() {
-	const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
 
-	const groupUuid = searchParams.get("group");
+  const groupUuid = searchParams.get("group");
 
-	const [group, setGroup] = useState<Group | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
 
-	const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-	const [isPreviewActive, setIsPreviewActive] = useState(false);
+  const [isPreviewActive, setIsPreviewActive] = useState(false);
 
-	const [previewingGroupUuid, setPreviewingGroupUuid] = useState<string | null>(
-		null
-	);
+  const [previewingGroupUuid, setPreviewingGroupUuid] = useState<string | null>(
+    null,
+  );
 
-	const [previewEnabled, setPreviewEnabled] = useState(true);
+  const [previewEnabled, setPreviewEnabled] = useState(true);
 
-	const { groups, fetchGroups } = useGroups();
+  const { groups, fetchGroups } = useGroups();
 
-	const router = useRouter();
+  const router = useRouter();
 
-	const { broadcastGroupSelection, onPreviewStatusChange } = useGroupSync();
+  const { broadcastGroupSelection, onPreviewStatusChange } = useGroupSync();
 
-	const selectedGroup = useMemo(() => {
-		if (!groupUuid) return null;
+  const selectedGroup = useMemo(() => {
+    if (!groupUuid) return null;
 
-		const allGroups = [...groups.drafts, ...groups.sent, ...groups.trash];
+    const allGroups = [...groups.drafts, ...groups.sent, ...groups.trash];
 
-		return allGroups.find((g) => g.uuid === groupUuid);
-	}, [groupUuid, groups]);
+    return allGroups.find((g) => g.uuid === groupUuid);
+  }, [groupUuid, groups]);
 
-	const { setActiveGroup } = useWebSocket();
+  const { setActiveGroup } = useWebSocket((fileName, movedGroupId) => {
+    // Refresh the groups list in the sidebar
+    fetchGroups();
 
-	useEffect(() => {
-		const groupUUID = searchParams.get("group");
+    // Refresh the group data if a file was moved to the currently selected group
+    if (groupUuid && movedGroupId === groupUuid) {
+      const fetchGroup = async () => {
+        try {
+          const response = await fetch(`/api/group/${groupUuid}`);
+          if (response.ok) {
+            const data = await response.json();
+            setGroup(data);
+          }
+        } catch (error) {
+          console.error("Failed to refresh group after file moved", error);
+        }
+      };
+      fetchGroup();
+    }
+  });
 
-		setActiveGroup(groupUUID);
-		if (groupUuid) {
-			setLoading(true);
+  useEffect(() => {
+    const groupUUID = searchParams.get("group");
 
-			const fetchGroup = async () => {
-				try {
-					const response = await fetch(`/api/group/${groupUuid}`);
+    setActiveGroup(groupUUID);
+    if (groupUuid) {
+      setLoading(true);
 
-					if (response.ok) {
-						const data = await response.json();
+      const fetchGroup = async () => {
+        try {
+          const response = await fetch(`/api/group/${groupUuid}`);
 
-						setGroup(data);
+          if (response.ok) {
+            const data = await response.json();
 
-						// Broadcast the selected group to preview page if preview is enabled
-						if (previewEnabled) {
-							broadcastGroupSelection(groupUuid);
-						}
-					} else {
-						console.error("Failed to fetch group");
+            setGroup(data);
 
-						setGroup(null);
+            // Broadcast the selected group to preview page if preview is enabled
+            if (previewEnabled) {
+              broadcastGroupSelection(groupUuid);
+            }
+          } else {
+            console.error("Failed to fetch group");
 
-						if (previewEnabled) {
-							broadcastGroupSelection(null);
-						}
-					}
-				} catch (error) {
-					console.error("Failed to fetch group", error);
+            setGroup(null);
 
-					setGroup(null);
+            if (previewEnabled) {
+              broadcastGroupSelection(null);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch group", error);
 
-					if (previewEnabled) {
-						broadcastGroupSelection(null);
-					}
-				} finally {
-					setLoading(false);
-				}
-			};
+          setGroup(null);
 
-			fetchGroup();
-		} else {
-			setGroup(null);
+          if (previewEnabled) {
+            broadcastGroupSelection(null);
+          }
+        } finally {
+          setLoading(false);
+        }
+      };
 
-			setLoading(false);
+      fetchGroup();
+    } else {
+      setGroup(null);
 
-			if (previewEnabled) {
-				broadcastGroupSelection(null);
-			}
-		}
-	}, [groupUuid, broadcastGroupSelection, previewEnabled, searchParams]);
+      setLoading(false);
 
-	// Listen for preview status updates
-	useEffect(() => {
-		const cleanup = onPreviewStatusChange((isActive, groupUuid) => {
-			setIsPreviewActive(isActive);
-			setPreviewingGroupUuid(groupUuid);
-		});
+      if (previewEnabled) {
+        broadcastGroupSelection(null);
+      }
+    }
+  }, [groupUuid, broadcastGroupSelection, previewEnabled, searchParams]);
 
-		return cleanup;
-	}, [onPreviewStatusChange]);
+  // Listen for preview status updates
+  useEffect(() => {
+    const cleanup = onPreviewStatusChange((isActive, groupUuid) => {
+      setIsPreviewActive(isActive);
+      setPreviewingGroupUuid(groupUuid);
+    });
 
-	const togglePreview = () => {
-		const newPreviewEnabled = !previewEnabled;
-		setPreviewEnabled(newPreviewEnabled);
+    return cleanup;
+  }, [onPreviewStatusChange]);
 
-		if (newPreviewEnabled && groupUuid) {
-			// Re-broadcast current group when enabling preview
-			broadcastGroupSelection(groupUuid);
-		} else if (!newPreviewEnabled) {
-			// Clear preview when disabling
-			broadcastGroupSelection(null);
-		}
-	};
+  const togglePreview = () => {
+    const newPreviewEnabled = !previewEnabled;
+    setPreviewEnabled(newPreviewEnabled);
 
-	const handleMoveGroup = async (
-		action: "send" | "delete" | "restore" | "re-draft"
-	) => {
-		if (!group) return;
+    if (newPreviewEnabled && groupUuid) {
+      // Re-broadcast current group when enabling preview
+      broadcastGroupSelection(groupUuid);
+    } else if (!newPreviewEnabled) {
+      // Clear preview when disabling
+      broadcastGroupSelection(null);
+    }
+  };
 
-		try {
-			const response = await fetch(`/api/group/${group.uuid}/move`, {
-				method: "POST",
+  const handleMoveGroup = async (
+    action: "send" | "delete" | "restore" | "re-draft",
+  ) => {
+    if (!group) return;
 
-				headers: {
-					"Content-Type": "application/json",
-				},
+    try {
+      const response = await fetch(`/api/group/${group.uuid}/move`, {
+        method: "POST",
 
-				body: JSON.stringify({ action }),
-			});
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-			if (response.ok) {
-				await fetchGroups();
+        body: JSON.stringify({ action }),
+      });
 
-				if (action === "send") {
-					setGroup({ ...group, folder: "sent" });
-				} else if (action === "re-draft" || action === "restore") {
-					setGroup({ ...group, folder: "draft" });
+      if (response.ok) {
+        await fetchGroups();
 
-					const params = new URLSearchParams(searchParams.toString());
+        if (action === "send") {
+          setGroup({ ...group, folder: "sent" });
+        } else if (action === "re-draft" || action === "restore") {
+          setGroup({ ...group, folder: "draft" });
 
-					params.set("view", "drafts");
+          const params = new URLSearchParams(searchParams.toString());
 
-					router.push(`/dashboard?${params.toString()}`);
-				} else {
-					router.push("/dashboard");
-				}
-			} else {
-				console.error(`Failed to ${action} group`);
-			}
-		} catch (error) {
-			console.error(`Failed to ${action} group`, error);
-		}
-	};
+          params.set("view", "drafts");
 
-	return (
-		<SidebarProvider
-			style={
-				{
-					"--sidebar-width": "350px",
-				} as React.CSSProperties
-			}
-		>
-			<AppSidebar />
+          router.push(`/dashboard?${params.toString()}`);
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        console.error(`Failed to ${action} group`);
+      }
+    } catch (error) {
+      console.error(`Failed to ${action} group`, error);
+    }
+  };
 
-			<SidebarInset>
-				<header className="bg-background sticky top-0 flex justify-between shrink-0 items-center gap-2 border-b p-4">
-					<div className="flex items-center gap-2">
-						<NewGroupButton />
-						{isPreviewActive && previewingGroupUuid === groupUuid && (
-							<Badge
-								variant="secondary"
-								className="text-xs flex items-center gap-1"
-							>
-								<Monitor className="h-3 w-3" />
-								Previewing
-							</Badge>
-						)}
-					</div>
+  return (
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "350px",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar />
 
-					<div className="flex items-center gap-2">
-						<Button
-							variant={previewEnabled ? "default" : "outline"}
-							size="sm"
-							className="text-xs"
-							onClick={togglePreview}
-						>
-							{previewEnabled ? (
-								<>
-									<Monitor className="scale-75" />
-									Preview On
-								</>
-							) : (
-								<>
-									<MonitorOff className="scale-75" />
-									Preview Off
-								</>
-							)}
-						</Button>
-						<Button variant="outline" size="sm" className="text-xs">
-							<Info className="scale-75"></Info>
-							Directions
-						</Button>
-					</div>
-				</header>
+      <SidebarInset>
+        <header className="bg-background sticky top-0 flex justify-between shrink-0 items-center gap-2 border-b p-4">
+          <div className="flex items-center gap-2">
+            <NewGroupButton />
+            {isPreviewActive && previewingGroupUuid === groupUuid && (
+              <Badge
+                variant="secondary"
+                className="text-xs flex items-center gap-1"
+              >
+                <Monitor className="h-3 w-3" />
+                Previewing
+              </Badge>
+            )}
+          </div>
 
-				<div className="flex flex-1 flex-col gap-4 p-4">
-					{loading && selectedGroup ? (
-						<div className="flex gap-2 mb-4">
-							<div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
-							<div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
-						</div>
-					) : (
-						group && (
-							<div className="flex gap-2 mb-4">
-								{group.folder === "draft" && (
-									<Button
-										size="sm"
-										className="text-xs"
-										onClick={() => handleMoveGroup("send")}
-									>
-										<Send className="scale-75" /> Send
-									</Button>
-								)}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={previewEnabled ? "default" : "outline"}
+              size="sm"
+              className="text-xs"
+              onClick={togglePreview}
+            >
+              {previewEnabled ? (
+                <>
+                  <Monitor className="scale-75" />
+                  Preview On
+                </>
+              ) : (
+                <>
+                  <MonitorOff className="scale-75" />
+                  Preview Off
+                </>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" className="text-xs">
+              <Info className="scale-75"></Info>
+              Directions
+            </Button>
+          </div>
+        </header>
 
-								{group.folder === "sent" && (
-									<Button
-										size="sm"
-										className="text-xs"
-										onClick={() => handleMoveGroup("re-draft")}
-									>
-										<Camera className="scale-75" /> Take more pictures
-									</Button>
-								)}
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          {loading && selectedGroup ? (
+            <div className="flex gap-2 mb-4">
+              <div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
+              <div className="h-8 w-20 rounded-md bg-muted/50 animate-pulse" />
+            </div>
+          ) : (
+            group && (
+              <div className="flex gap-2 mb-4">
+                {group.folder === "draft" && (
+                  <Button
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleMoveGroup("send")}
+                  >
+                    <Send className="scale-75" /> Send
+                  </Button>
+                )}
 
-								{(group.folder === "draft" || group.folder === "sent") && (
-									<Button
-										variant="destructive"
-										size="sm"
-										className="text-xs"
-										onClick={() => handleMoveGroup("delete")}
-									>
-										<Trash2 className="scale-75" /> Delete
-									</Button>
-								)}
+                {group.folder === "sent" && (
+                  <Button
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleMoveGroup("re-draft")}
+                  >
+                    <Camera className="scale-75" /> Take more pictures
+                  </Button>
+                )}
 
-								{group.folder === "trash" && (
-									<Button
-										size="sm"
-										className="text-xs"
-										onClick={() => handleMoveGroup("restore")}
-									>
-										<RotateCcw className="scale-75" /> Restore
-									</Button>
-								)}
-							</div>
-						)
-					)}
+                {(group.folder === "draft" || group.folder === "sent") && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleMoveGroup("delete")}
+                  >
+                    <Trash2 className="scale-75" /> Delete
+                  </Button>
+                )}
 
-					{loading ? (
-						<div className="grid grid-cols-3 gap-4">
-							{Array.from({ length: selectedGroup?.imageCount || 0 }).map(
-								(_, index) => (
-									<div
-										key={index}
-										className="relative aspect-video rounded-lg overflow-hidden bg-muted/50 animate-pulse"
-									/>
-								)
-							)}
-						</div>
-					) : group ? (
-						group.images.length > 0 ? (
-							<div className="grid grid-cols-3 gap-4">
-								{group.images.map((image, index) => (
-									<div
-										key={index}
-										className="relative aspect-video rounded-lg overflow-hidden"
-									>
-										<Image
-											src={`/${group.folder}/${group.uuid}/${image}`}
-											alt={`Image ${index + 1}`}
-											layout="fill"
-											objectFit="cover"
-										/>
-									</div>
-								))}
-							</div>
-						) : (
-							<div className="flex flex-1 items-center justify-center text-muted-foreground">
-								<p>No images in this group yet</p>
-							</div>
-						)
-					) : (
-						<div className="flex flex-1 items-center justify-center text-muted-foreground">
-							<p>Select a group to view its content</p>
-						</div>
-					)}
-				</div>
-			</SidebarInset>
-		</SidebarProvider>
-	);
+                {group.folder === "trash" && (
+                  <Button
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleMoveGroup("restore")}
+                  >
+                    <RotateCcw className="scale-75" /> Restore
+                  </Button>
+                )}
+              </div>
+            )
+          )}
+
+          {loading ? (
+            <div className="grid grid-cols-3 gap-4">
+              {Array.from({ length: selectedGroup?.imageCount || 0 }).map(
+                (_, index) => (
+                  <div
+                    key={index}
+                    className="relative aspect-video rounded-lg overflow-hidden bg-muted/50 animate-pulse"
+                  />
+                ),
+              )}
+            </div>
+          ) : group ? (
+            group.images.length > 0 ? (
+              <div className="grid grid-cols-3 gap-4">
+                {group.images.map((image, index) => (
+                  <div
+                    key={index}
+                    className="relative aspect-video rounded-lg overflow-hidden"
+                  >
+                    <Image
+                      src={`/${group.folder}/${group.uuid}/${image}`}
+                      alt={`Image ${index + 1}`}
+                      fill
+                      style={{ objectFit: "cover" }}
+                      unoptimized
+                      key={`${image}-${group.images.length}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                <p>No images in this group yet</p>
+              </div>
+            )
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-muted-foreground">
+              <p>Select a group to view its content</p>
+            </div>
+          )}
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }
