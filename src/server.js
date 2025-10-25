@@ -57,6 +57,8 @@ watcher.on("add", async (filePath) => {
 		// Wait a brief moment to ensure file is fully written
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
+		//TODO: Apply watermark
+
 		// Move file to draft directory
 		await fs.rename(filePath, newFilePath);
 		console.log(`Moved ${fileName} to ${activeGroup} draft folder`);

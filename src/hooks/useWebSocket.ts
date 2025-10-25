@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 
-export const useWebSocket = () => {
+type OnFileMoved = (fileName: string, groupId: string) => void;
+
+export const useWebSocket = (onFileMoved?: OnFileMoved) => {
 	const wsRef = useRef<WebSocket | null>(null);
 
 	useEffect(() => {
@@ -20,10 +22,21 @@ export const useWebSocket = () => {
 			console.log("Disconnected from WebSocket server");
 		};
 
+		wsRef.current.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+				if (data.type === "FILE_MOVED" && onFileMoved) {
+					onFileMoved(data.fileName, data.groupId);
+				}
+			} catch (error) {
+				console.error("Error processing WebSocket message:", error);
+			}
+		};
+
 		return () => {
 			wsRef.current?.close();
 		};
-	}, []);
+	}, [onFileMoved]);
 
 	const setActiveGroup = (groupId: string | null) => {
 		if (wsRef.current?.readyState === WebSocket.OPEN) {
