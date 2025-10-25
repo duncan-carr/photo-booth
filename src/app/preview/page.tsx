@@ -16,6 +16,7 @@ interface Group {
 export default function PreviewPage() {
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
 
   const { onGroupChange, broadcastPreviewStatus } = useGroupSync();
 
@@ -29,6 +30,10 @@ export default function PreviewPage() {
           if (response.ok) {
             const data = await response.json();
             setGroup(data);
+            // Show the most recent image when new images arrive
+            if (data.images.length > 0) {
+              setSelectedImageIndex(data.images.length - 1);
+            }
           }
         } catch (error) {
           console.error("Failed to refresh preview after file moved", error);
@@ -47,6 +52,10 @@ export default function PreviewPage() {
           if (response.ok) {
             const data = await response.json();
             setGroup(data);
+            // Set the most recent image as selected by default
+            if (data.images.length > 0) {
+              setSelectedImageIndex(data.images.length - 1);
+            }
             // Notify dashboard that preview is active
             broadcastPreviewStatus(true, groupUuid);
           } else {
@@ -107,27 +116,50 @@ export default function PreviewPage() {
     );
   }
 
+  const selectedImage = group.images[selectedImageIndex];
+
   return (
-    <div className="h-screen w-screen bg-black p-8 overflow-auto">
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
+    <div className="h-screen w-screen bg-black flex flex-col p-8 overflow-hidden">
+      {/* Main preview area */}
+      <div className="flex-1 relative rounded-lg overflow-hidden bg-gray-900 mb-6">
+        <Image
+          src={`/${group.folder}/${group.uuid}/${selectedImage}`}
+          alt={`Image ${selectedImageIndex + 1}`}
+          fill
+          style={{ objectFit: "contain" }}
+          sizes="100vw"
+          unoptimized
+          key={`${selectedImage}-${group.images.length}`}
+        />
+      </div>
+
+      {/* Thumbnail strip at bottom */}
+      <div className="h-32 flex gap-4 overflow-x-auto pb-2">
         {group.images.map((image, index) => (
-          <div
+          <button
             key={`${image}-${group.images.length}`}
-            className="relative aspect-video rounded-lg overflow-hidden bg-gray-900"
+            onClick={() => setSelectedImageIndex(index)}
+            className={`relative shrink-0 w-48 h-full rounded-lg overflow-hidden transition-all ${
+              index === selectedImageIndex
+                ? "ring-4 ring-white scale-105"
+                : "ring-2 ring-gray-600 opacity-60 hover:opacity-100 hover:ring-gray-400"
+            }`}
           >
             <Image
               src={`/${group.folder}/${group.uuid}/${image}`}
-              alt={`Image ${index + 1}`}
+              alt={`Thumbnail ${index + 1}`}
               fill
               style={{ objectFit: "cover" }}
-              sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              sizes="200px"
               unoptimized
             />
-          </div>
+          </button>
         ))}
       </div>
-      <div className="fixed bottom-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg backdrop-blur-sm">
-        {group.images.length} {group.images.length === 1 ? "image" : "images"}
+
+      {/* Image counter */}
+      <div className="fixed top-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg backdrop-blur-sm">
+        {selectedImageIndex + 1} / {group.images.length}
       </div>
     </div>
   );
